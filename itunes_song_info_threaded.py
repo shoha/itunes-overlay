@@ -1,6 +1,10 @@
 # Threaded imports
 import threading, time
 
+# BBFreeze Imports
+import pkg_resources
+import win32com.server.util
+
 # Server imports
 
 from gevent import monkey; monkey.patch_all()
@@ -57,7 +61,8 @@ class Server(object):
             try:
                 return open('index.html').read()
             except Exception:
-                return not_found(start_response)
+	            start_response('404 Not Found', [])
+	            return ['<h1>Not Found</h1>']
 
         if path.startswith('static/'):
             try:
