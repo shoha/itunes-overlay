@@ -1,5 +1,5 @@
 # Threaded imports
-import threading, time
+import threading, time, msvcrt, sys
 
 # BBFreeze Imports
 import pkg_resources
@@ -44,9 +44,7 @@ class SongInfoNamespace(socketio.namespace.BaseNamespace, BroadcastMixin):
 
 class Server(object):
     def __init__(self):
-        self.buffer = []
-        # Dummy request object to maintain state between Namespace
-        # initialization.
+    	
         self.request = {
             'last_track': {}
         }
@@ -173,8 +171,6 @@ class ClientThread(threading.Thread):
 		logging.basicConfig(level=logging.ERROR)
 
 		print 'launching itunes'
-		
-		itunesEvents = win32com.client.WithEvents(iTunes, iTunesEventHandler)
 
 		while True:
 			time.sleep(0.1)
@@ -183,15 +179,17 @@ class ClientThread(threading.Thread):
 
 if __name__ == '__main__':
 	server_thread = ServerThread()
-
-
 	server_thread.start()
 
 	iTunes = win32com.client.Dispatch("iTunes.Application")
+	iTunesEvents = win32com.client.WithEvents(iTunes, iTunesEventHandler)
 	io = SocketIO('localhost', 8080, SocketEventsNamespace)
 
 	client_thread = ClientThread()
 	client_thread.start()
 
-	while True:
+	while not msvcrt.kbhit():
 		time.sleep(0.1)
+
+	iTunesEvents.close()
+	del iTunesEvents, iTunes
