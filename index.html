@@ -1,0 +1,205 @@
+<html>
+    <head>
+        <title>Song Info</title>
+
+        <link href='http://fonts.googleapis.com/css?family=Raleway:600,500,400' rel='stylesheet' type='text/css'>
+
+        <style>
+            *
+            {
+                padding: 0px;
+                margin: 0px;
+            }
+
+            body
+            {
+                width: 1920px;
+                height: 1080px;
+            }
+
+            div#song_info_card_wrapper
+            {
+                z-index: 10;
+                position: absolute;
+                top: 880px;
+                left: 0px;
+                -webkit-perspective: 1000;
+                background-color: #333;
+                background-image: url(static/img/loading.gif);
+                background-size: 100%;
+                width: 200px;
+                height: 200px;
+            }
+
+            div#current_song_info
+            {
+                transition: .5s ease;
+                position: absolute;
+                opacity: 1;
+            }
+
+            div#current_song_info.hidden
+            {
+                opacity: 0;
+            }
+
+                img#album_art
+                {
+                    position: absolute;
+                    top: 0px;
+                    left: 0px;
+                    width: 200px;
+                    height: 200px;
+                }
+
+            div#song_info_text_wrapper
+            {
+                position: absolute;
+                top: 1010px;
+                left: 200px;
+                height: 50px;
+                padding: 5px 10px 10px 0px;
+                background: #333;
+                color: white;
+                font-size: 35px;
+                font-family: Raleway;
+                font-weight: bold;
+                transition: .5s ease;
+            }
+
+            div#song_info_text_wrapper.hidden
+            {
+                top: 1080px;
+            }
+            
+            div#progress_wrapper
+            {
+                position: absolute;
+                top: 1060px;
+                left: 200px;
+                width: 1740px;
+                height: 20px;
+                background: #333;
+                z-index: 9;
+            }
+
+                div#progress_wrapper div#progress
+                {
+                    height: 100%;
+                    width: 0;
+                    background: #29d;
+                    transition: .5s ease;
+                }
+                
+        </style>
+
+
+    </head>
+    <body>
+
+        <div id="song_info_card_wrapper" class="hidden">
+                <div id="current_song_info">
+                    <img src="static/img/album_art_not_found.png" id="album_art">
+                </div>
+        </div>
+
+        <div id="song_info_text_wrapper" class="hidden">
+            <div id="song_info_text" class="marquee"></div>
+        </div>
+
+        <div id="progress_wrapper">
+            <div id="progress"></div>
+        </div>
+
+
+        <script src="static/jquery-2.0.3.min.js"></script>
+        <script type="text/javascript" src="static/socket.io.js"></script>
+
+        <script>
+            $(function()
+            {
+
+                WEB_SOCKET_SWF_LOCATION = "/static/WebSocketMain.swf";
+                WEB_SOCKET_DEBUG = true;
+
+                var progress_bar = document.getElementById('progress');
+                var album_art = document.getElementById('album_art')
+
+                var current_song_info = $('#current_song_info');
+                var song_info_text = $('#song_info_text_wrapper');    
+
+
+                var now_playing = {};
+                var progress_interval = null;
+
+                var socket = io.connect();
+
+                $(window).bind("beforeunload", function() {
+                    socket.disconnect();
+                });
+
+                socket.on('connect', function () {
+                    console.log('Connected.');
+                    socket.emit('initialize');
+                });
+
+                socket.on('reconnect', function () {
+                    console.log('Reconnected');
+                });
+
+                socket.on('reconnecting', function () {
+                    console.log('Reconnecting.');
+                });
+
+                socket.on('error', function (e) {
+                    console.log('Error.');
+                });
+
+                socket.on('player_stopped', function()
+                {
+                    console.log('player_stopped');
+                    clearInterval(progress_interval);
+                });
+
+                socket.on('new_song', function(song_info)
+                {
+                    console.log('new_song')
+                    current_song_info.addClass('hidden');
+                    song_info_text.addClass('hidden');
+
+                    now_playing = song_info;
+                    now_playing.started = Date.now() - now_playing.position;
+
+                    setTimeout(function(){
+                        song_info_text.text(song_info.name + ' by ' + song_info.artist);
+                        if(song_info.artwork == null)
+                            album_art.src = 'static/img/album_art_not_found.png';
+                        else
+                            album_art.src = 'data:image/jpeg;base64,' + song_info.artwork;
+
+                        setTimeout(function(){current_song_info.removeClass('hidden'); song_info_text.removeClass('hidden');}, 1000);
+                    }, 1000);
+
+                    var update_progress = function(value){
+                        if(!now_playing && !now_playing.started)
+                        {
+                            return;
+                        }
+
+                        percent_played = (Date.now() - now_playing.started) / now_playing.duration;
+                        progress_bar.style.width = percent_played * 100 + '%';
+                    }
+                    clearInterval(progress_interval);
+                    progress_interval = setInterval(update_progress, 1000);
+
+                });
+
+
+
+                
+
+            })  
+
+        </script>
+    </body>
+</html>
