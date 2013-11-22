@@ -133,25 +133,30 @@ class iTunesEventHandler():
 		print 'client: OnPlayerPlay'
 		track = win32com.client.CastTo(track, 'IITTrack')
 		
-		artwork_collection = win32com.client.CastTo(track.Artwork, 'IITArtworkCollection')
-		artwork = win32com.client.CastTo(artwork_collection.Item(1), 'IITArtwork')
+		try:
+			artwork_collection = win32com.client.CastTo(track.Artwork, 'IITArtworkCollection')
+			artwork = win32com.client.CastTo(artwork_collection.Item(1), 'IITArtwork')
+			
+			artwork_path = os.path.join(os.getcwd(), 'album.jpg')
+			artwork.SaveArtworkToFile(artwork_path)
+		except:
+			artwork = None
 
-		artwork_path = os.path.join(os.getcwd(), 'album.jpg')
-		artwork.SaveArtworkToFile(artwork_path)
-		artwork_encoded = ''
+		artwork_encoded = None
 
-		with open(artwork_path, 'rb') as a:
-			data = a.read()
-			artwork_encoded = data.encode("Base64")
+		if artwork != None:		
+			with open(artwork_path, 'rb') as a:
+				data = a.read()
+				artwork_encoded = data.encode("Base64")
 
-			io.emit('new_song', {
-				"name": track.Name,
-				"album": track.Album,
-				"artist": track.Artist,
-				"duration": track.Duration * 1000,
-				"position": iTunes.PlayerPosition * 1000,
-				"artwork": artwork_encoded
-			})
+		io.emit('new_song', {
+			"name": track.Name,
+			"album": track.Album,
+			"artist": track.Artist,
+			"duration": track.Duration * 1000,
+			"position": iTunes.PlayerPosition * 1000,
+			"artwork": artwork_encoded
+		})
 
 
 class ClientThread(threading.Thread):
