@@ -24,27 +24,30 @@ from socketIO_client import SocketIO, BaseNamespace
 class SongInfoNamespace(socketio.namespace.BaseNamespace, BroadcastMixin):
 
     def recv_connect(self):
-        print 'recv_connect'
+        print 'server: recv_connect'
 
     def recv_disconnect(self):
-        print 'disconnected'
+        print 'server: recv_disconnect'
 
         self.disconnect(silent=True)
 
     def on_new_song(self, track):
+    	print 'server: new_song'
         self.request['last_track'] = track;
         self.broadcast_event('new_song', track)
 
     def on_player_stopped(self):
+    	print 'server: player_stopped'
         self.broadcast_event('player_stopped')
 
     def on_initialize(self):
+    	print 'server: initialize'
         self.emit('new_song', self.request['last_track'])
 
 
 class Server(object):
     def __init__(self):
-    	
+
         self.request = {
             'last_track': {}
         }
@@ -107,29 +110,27 @@ class ServerThread(threading.Thread):
 
 class SocketEventsNamespace(BaseNamespace):
 	def on_connect(self):
-		print 'Connected'
+		print 'client: connect'
 
 	def on_disconnect(self):
-		print 'Disconnected'
+		print 'client: disconnect'
 
 	def on_error(self, name, message):
-		print 'Error'
+		print 'client: error'
 
 class iTunesEventHandler():
 	def __init__(self):
-		self.quitting = False
+		print 'client: init'
 
+		if iTunes.CurrentTrack != None:
+			self.OnPlayerPlayEvent(iTunes.CurrentTrack)
+	
 	def OnPlayerStopEvent(self, track):
-		print 'stopped'
-		try:
-		 io.emit('player_stopped')
-		except Exception, e:
-			io = SocketIO('localhost', 8080, SocketEventsNamespace)
-			io.emit('player_stopped');
-
+		print 'client: OnPlayerStop'
+		io.emit('player_stopped')
 
 	def OnPlayerPlayEvent(self, track):
-		print 'playing'
+		print 'client: OnPlayerPlay'
 		track = win32com.client.CastTo(track, 'IITTrack')
 		
 		artwork_collection = win32com.client.CastTo(track.Artwork, 'IITArtworkCollection')
@@ -143,7 +144,6 @@ class iTunesEventHandler():
 			data = a.read()
 			artwork_encoded = data.encode("Base64")
 
-		try:
 			io.emit('new_song', {
 				"name": track.Name,
 				"album": track.Album,
@@ -152,16 +152,7 @@ class iTunesEventHandler():
 				"position": iTunes.PlayerPosition * 1000,
 				"artwork": artwork_encoded
 			})
-		except Exception, e:
-			io = SocketIO('localhost', 8080, SocketEventsNamespace)
-			io.emit('new_song', {
-				"name": track.Name,
-				"album": track.Album,
-				"artist": track.Artist,
-				"duration": track.Duration * 1000,
-				"position": iTunes.PlayerPosition * 1000,
-				"artwork": artwork_encoded
-			})
+
 
 class ClientThread(threading.Thread):
 
@@ -176,17 +167,26 @@ class ClientThread(threading.Thread):
 			time.sleep(0.1)
 			pythoncom.PumpWaitingMessages()
 
+class SocketKeepalive(threading.Thread):
+
+	def run(self):
+		print 'spinning io'
+		io.wait()
+
 
 if __name__ == '__main__':
 	server_thread = ServerThread()
 	server_thread.start()
 
+	io = SocketIO('localhost', 8080, SocketEventsNamespace)
 	iTunes = win32com.client.Dispatch("iTunes.Application")
 	iTunesEvents = win32com.client.WithEvents(iTunes, iTunesEventHandler)
-	io = SocketIO('localhost', 8080, SocketEventsNamespace)
-
+	
 	client_thread = ClientThread()
 	client_thread.start()
+
+	socket_keepalive_thread = SocketKeepalive()
+	socket_keepalive_thread.start()
 
 	while not msvcrt.kbhit():
 		time.sleep(0.1)
