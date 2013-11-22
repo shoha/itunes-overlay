@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html>
     <head>
         <title>Song Info</title>
@@ -55,10 +56,10 @@
             div#song_info_text_wrapper
             {
                 position: absolute;
-                top: 990;
+                top: 990px;
                 left: 200px;
                 height: 50px;
-                padding: 5px 10px 10px 0px;
+                padding: 5px 10px 15px 0px;
                 background: #333;
                 color: white;
                 font-size: 55px;
@@ -166,6 +167,16 @@
                     clearInterval(progress_interval);
                 });
 
+                socket.on('resume_song', function(song_info)
+                {
+                    console.log('resume_song');
+                    
+                    now_playing = song_info;
+                    now_playing.started = Date.now() - now_playing.position;
+                    
+                    progress_interval = setInterval(update_progress, 1000);
+                });
+
                 socket.on('new_song', function(song_info)
                 {
                     console.log('new_song')
@@ -185,19 +196,26 @@
                         setTimeout(function(){current_song_info.removeClass('hidden'); song_info_text.removeClass('hidden');}, 1000);
                     }, 1000);
 
-                    var update_progress = function(value){
-                        if(!now_playing && !now_playing.started)
-                        {
-                            return;
-                        }
 
-                        percent_played = (Date.now() - now_playing.started) / now_playing.duration;
-                        progress_bar.style.width = percent_played * 100 + '%';
+                    update_progress();
+
+                    if(!now_playing.player_stopped)
+                    {
+                        clearInterval(progress_interval);
+                        progress_interval = setInterval(update_progress, 1000);    
                     }
-                    clearInterval(progress_interval);
-                    progress_interval = setInterval(update_progress, 1000);
-
+                    
                 });
+
+                var update_progress = function(value){
+                    if(!now_playing && !now_playing.started)
+                    {
+                        return;
+                    }
+
+                    percent_played = (Date.now() - now_playing.started) / now_playing.duration;
+                    progress_bar.style.width = percent_played * 100 + '%';
+                }
 
             })  
 
