@@ -33,8 +33,13 @@ class SongInfoNamespace(socketio.namespace.BaseNamespace, BroadcastMixin):
 
     def on_new_song(self, track):
     	print 'server: new_song'
-        self.request['last_track'] = track;
-        self.broadcast_event('new_song', track)
+    	if self.request['last_track'] and (track['name'], track['album']) == (self.request['last_track']['name'], self.request['last_track']['album']):
+    		self.request['last_track'] = track;
+    		track['position'] = iTunes.PlayerPosition * 1000
+    		self.broadcast_event('resume_song', track)
+    	else:
+	        self.request['last_track'] = track;
+	        self.broadcast_event('new_song', track)
 
     def on_player_stopped(self):
     	print 'server: player_stopped'
@@ -42,7 +47,9 @@ class SongInfoNamespace(socketio.namespace.BaseNamespace, BroadcastMixin):
 
     def on_initialize(self):
     	print 'server: initialize'
-        self.emit('new_song', self.request['last_track'])
+        # self.emit('new_song', self.request['last_track'])
+        self.request['last_track'] = None
+        self.broadcast_event('get_player_state')
 
 
 class Server(object):
@@ -118,12 +125,46 @@ class SocketEventsNamespace(BaseNamespace):
 	def on_error(self, name, message):
 		print 'client: error'
 
+	def on_get_player_state(self):
+		if iTunes.CurrentTrack is None:
+			return
+
+		track = win32com.client.CastTo(iTunes.CurrentTrack, 'IITTrack')
+		artwork = None
+		try:
+			artwork_collection = win32com.client.CastTo(track.Artwork, 'IITArtworkCollection')
+			artwork = win32com.client.CastTo(artwork_collection.Item(1), 'IITArtwork')
+			
+			artwork_path = os.path.join(os.getcwd(), 'album.jpg')
+			artwork.SaveArtworkToFile(artwork_path)
+		except:
+			artwork = None
+
+		artwork_encoded = None
+
+		if artwork != None:		
+			with open(artwork_path, 'rb') as a:
+				data = a.read()
+				artwork_encoded = data.encode("Base64")
+		
+		io.emit('new_song', {
+			"name": track.Name,
+			"album": track.Album,
+			"artist": track.Artist,
+			"duration": track.Duration * 1000,
+			"position": iTunes.PlayerPosition * 1000,
+			"artwork": artwork_encoded,
+			"player_stopped": iTunes.PlayerState == 0
+		})
 class iTunesEventHandler():
 	def __init__(self):
 		print 'client: init'
 
 		if iTunes.CurrentTrack != None:
 			self.OnPlayerPlayEvent(iTunes.CurrentTrack)
+
+	def OnPlayerPlayingTrackChanged(self, track):
+		print 'client: OnPlayerPlayingTrackChanged'
 	
 	def OnPlayerStopEvent(self, track):
 		print 'client: OnPlayerStop'
@@ -155,7 +196,8 @@ class iTunesEventHandler():
 			"artist": track.Artist,
 			"duration": track.Duration * 1000,
 			"position": iTunes.PlayerPosition * 1000,
-			"artwork": artwork_encoded
+			"artwork": artwork_encoded,
+			"player_stopped": iTunes.PlayerState == 0
 		})
 
 
