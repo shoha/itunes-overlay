@@ -56,17 +56,35 @@
             div#song_info_text_wrapper
             {
                 position: absolute;
-                top: 990px;
+                top: 1010px;
                 left: 200px;
-                height: 50px;
-                padding: 5px 10px 15px 0px;
-                background: #333;
+                width: 1720px;
+                height: 55px;
                 color: white;
-                font-size: 55px;
                 font-family: 'Quicksand';
-                font-weight: bold;
                 transition: .5s ease;
+                font-size: 0;
             }
+                span.marquee
+                {
+                    -webkit-text-stroke: 0.6px;
+                    padding: 5px 10px 5px 10px;
+                    height: 55px;
+                    background: #333;
+                    /*vertical-align: bottom;*/
+                }
+
+                span#song_info_name
+                {
+                    font-size: 40px;
+                }
+
+                span#song_info_artist
+                {
+                    font-size: 30px;
+                    padding-top: 14px;
+                    padding-bottom: 7px;
+                }
 
             div#song_info_text_wrapper.hidden
             {
@@ -91,6 +109,11 @@
                     background: #29d;
                     transition: .5s ease;
                 }
+
+                div#progress_wrapper div#progress.paused
+                {
+                    background: #d92;
+                }
                 
         </style>
 
@@ -105,7 +128,8 @@
         </div>
 
         <div id="song_info_text_wrapper" class="hidden">
-            <div id="song_info_text" class="marquee"></div>
+            <span id="song_info_name" class="marquee"></span>
+            <span id="song_info_artist" class="marquee"></span>
         </div>
 
         <div id="progress_wrapper">
@@ -113,22 +137,21 @@
         </div>
 
 
-        <script src="static/jquery-2.0.3.min.js"></script>
+        <script type="text/javascript" src="static/jquery-2.0.3.min.js"></script>
         <script type="text/javascript" src="static/socket.io.js"></script>
 
-        <script>
+        <script type="text/javascript">
             $(function()
             {
 
                 WEB_SOCKET_SWF_LOCATION = "/static/WebSocketMain.swf";
                 WEB_SOCKET_DEBUG = true;
 
-                var progress_bar = document.getElementById('progress');
-                var album_art = document.getElementById('album_art')
+                var progress_bar = $('#progress');
+                var album_art = $('#album_art')
 
                 var current_song_info = $('#current_song_info');
                 var song_info_text = $('#song_info_text_wrapper');    
-
 
                 var now_playing = {};
                 var progress_interval = null;
@@ -165,6 +188,7 @@
                 {
                     console.log('player_stopped');
                     clearInterval(progress_interval);
+                    progress_bar.addClass('paused');
                 });
 
                 socket.on('resume_song', function(song_info)
@@ -173,6 +197,7 @@
                     
                     now_playing = song_info;
                     now_playing.started = Date.now() - now_playing.position;
+                    progress_bar.removeClass('paused');
                     
                     progress_interval = setInterval(update_progress, 1000);
                 });
@@ -187,21 +212,25 @@
                     now_playing.started = Date.now() - now_playing.position;
 
                     setTimeout(function(){
-                        song_info_text.text(song_info.name + ' by ' + song_info.artist);
+                        // song_info_text.text(song_info.name + ' by ' + song_info.artist);
+                        song_info_text.find('#song_info_artist').text(song_info.artist);
+                        song_info_text.find('#song_info_name').text(song_info.name);
                         if(song_info.artwork == null)
-                            album_art.src = 'static/img/album_art_not_found.png';
+                            album_art.attr('src', 'static/img/album_art_not_found.png');
                         else
-                            album_art.src = 'data:image/jpeg;base64,' + song_info.artwork;
+                            album_art.attr('src', 'data:image/jpeg;base64,' + song_info.artwork);
 
                         setTimeout(function(){current_song_info.removeClass('hidden'); song_info_text.removeClass('hidden');}, 1000);
                     }, 1000);
 
 
                     update_progress();
+                    progress_bar.addClass('paused');
 
                     if(!now_playing.player_stopped)
                     {
                         clearInterval(progress_interval);
+                        progress_bar.removeClass('paused');
                         progress_interval = setInterval(update_progress, 1000);    
                     }
                     
@@ -214,7 +243,7 @@
                     }
 
                     percent_played = (Date.now() - now_playing.started) / now_playing.duration;
-                    progress_bar.style.width = percent_played * 100 + '%';
+                    progress_bar.css('width', percent_played * 100 + '%');
                 }
 
             })  
