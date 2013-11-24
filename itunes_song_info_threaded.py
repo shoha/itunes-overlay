@@ -26,6 +26,9 @@ class SongInfoNamespace(socketio.namespace.BaseNamespace, BroadcastMixin):
     def recv_connect(self):
         print 'server: recv_connect'
 
+        self.request['last_track'] = get_track_info(iTunes.CurrentTrack)
+        self.emit('new_player_state', self.request['last_track'])
+
     def recv_disconnect(self):
         print 'server: recv_disconnect'
 
@@ -33,6 +36,7 @@ class SongInfoNamespace(socketio.namespace.BaseNamespace, BroadcastMixin):
 
     def on_new_song(self, track):
     	print 'server: new_song'
+
     	if self.request['last_track'] and (track['name'], track['album']) == (self.request['last_track']['name'], self.request['last_track']['album']):
     		self.request['last_track'] = track;
     		track['position'] = iTunes.PlayerPosition * 1000
@@ -40,16 +44,6 @@ class SongInfoNamespace(socketio.namespace.BaseNamespace, BroadcastMixin):
     	else:
 	        self.request['last_track'] = track;
 	        self.broadcast_event('new_song', track)
-
-    def on_player_stopped(self):
-    	print 'server: player_stopped'
-        self.broadcast_event('player_stopped')
-
-    def on_initialize(self):
-    	print 'server: initialize'
-        # self.emit('new_song', self.request['last_track'])
-        self.request['last_track'] = None
-        self.broadcast_event('get_player_state')
 
 
 class Server(object):
@@ -103,6 +97,7 @@ class Server(object):
             start_response('404 Not Found', [])
             return ['<h1>Not Found</h1>']
 
+
 class ServerThread(threading.Thread):
 
 	def run(self):
@@ -125,37 +120,6 @@ class SocketEventsNamespace(BaseNamespace):
 	def on_error(self, name, message):
 		print 'client: error'
 
-	def on_get_player_state(self):
-		if iTunes.CurrentTrack is None:
-			return
-
-		track = win32com.client.CastTo(iTunes.CurrentTrack, 'IITTrack')
-		artwork = None
-		try:
-			artwork_collection = win32com.client.CastTo(track.Artwork, 'IITArtworkCollection')
-			artwork = win32com.client.CastTo(artwork_collection.Item(1), 'IITArtwork')
-			
-			artwork_path = os.path.join(os.getcwd(), 'album.jpg')
-			artwork.SaveArtworkToFile(artwork_path)
-		except:
-			artwork = None
-
-		artwork_encoded = None
-
-		if artwork != None:		
-			with open(artwork_path, 'rb') as a:
-				data = a.read()
-				artwork_encoded = data.encode("Base64")
-		
-		self.emit('new_song', {
-			"name": track.Name,
-			"album": track.Album,
-			"artist": track.Artist,
-			"duration": track.Duration * 1000,
-			"position": iTunes.PlayerPosition * 1000,
-			"artwork": artwork_encoded,
-			"player_stopped": iTunes.PlayerState == 0
-		})
 
 class iTunesEventHandler():
 	def __init__(self):
@@ -173,33 +137,7 @@ class iTunesEventHandler():
 
 	def OnPlayerPlayEvent(self, track):
 		print 'client: OnPlayerPlay'
-		track = win32com.client.CastTo(track, 'IITTrack')
-		
-		try:
-			artwork_collection = win32com.client.CastTo(track.Artwork, 'IITArtworkCollection')
-			artwork = win32com.client.CastTo(artwork_collection.Item(1), 'IITArtwork')
-			
-			artwork_path = os.path.join(os.getcwd(), 'album.jpg')
-			artwork.SaveArtworkToFile(artwork_path)
-		except:
-			artwork = None
-
-		artwork_encoded = None
-
-		if artwork != None:		
-			with open(artwork_path, 'rb') as a:
-				data = a.read()
-				artwork_encoded = data.encode("Base64")
-
-		io_namespace.emit('new_song', {
-			"name": track.Name,
-			"album": track.Album,
-			"artist": track.Artist,
-			"duration": track.Duration * 1000,
-			"position": iTunes.PlayerPosition * 1000,
-			"artwork": artwork_encoded,
-			"player_stopped": iTunes.PlayerState == 0
-		})
+		io_namespace.emit('new_song', get_track_info(track))
 
 
 class ClientThread(threading.Thread):
@@ -215,11 +153,45 @@ class ClientThread(threading.Thread):
 			time.sleep(0.1)
 			pythoncom.PumpWaitingMessages()
 
+
 class SocketKeepalive(threading.Thread):
 
 	def run(self):
 		print 'spinning io'
 		io.wait()
+
+
+def get_track_info(track):
+	if track is None:
+		return
+
+	track = win32com.client.CastTo(track, 'IITTrack')
+	artwork = None
+	try:
+		artwork_collection = win32com.client.CastTo(track.Artwork, 'IITArtworkCollection')
+		artwork = win32com.client.CastTo(artwork_collection.Item(1), 'IITArtwork')
+		
+		artwork_path = os.path.join(os.getcwd(), 'album.jpg')
+		artwork.SaveArtworkToFile(artwork_path)
+	except:
+		artwork = None
+
+	artwork_encoded = None
+
+	if artwork != None:		
+		with open(artwork_path, 'rb') as a:
+			data = a.read()
+			artwork_encoded = data.encode("Base64")
+	
+	return {
+		"name": track.Name,
+		"album": track.Album,
+		"artist": track.Artist,
+		"duration": track.Duration * 1000,
+		"position": iTunes.PlayerPosition * 1000,
+		"artwork": artwork_encoded,
+		"player_stopped": iTunes.PlayerState == 0
+	}
 
 
 if __name__ == '__main__':
