@@ -21,12 +21,12 @@ from socketIO_client import SocketIO, BaseNamespace
 
 # Server classes
 
-class SongInfoNamespace(socketio.namespace.BaseNamespace, BroadcastMixin):
+class SongInfoServerNamespace(socketio.namespace.BaseNamespace, BroadcastMixin):
 
     def recv_connect(self):
         print 'server: recv_connect'
 
-        self.request['last_track'] = get_track_info(iTunes.CurrentTrack)
+        self.request['last_track'] = get_track_info(None)
         self.emit('new_player_state', self.request['last_track'])
 
     def recv_disconnect(self):
@@ -34,19 +34,31 @@ class SongInfoNamespace(socketio.namespace.BaseNamespace, BroadcastMixin):
 
         self.disconnect(silent=True)
 
-    def on_new_song(self, track):
-    	print 'server: new_song'
+    def on_new_player_state(self, track):
+        print 'server: new_player_state'
 
-    	if self.request['last_track'] and (track['name'], track['album']) == (self.request['last_track']['name'], self.request['last_track']['album']):
-    		self.request['last_track'] = track;
-    		track['position'] = iTunes.PlayerPosition * 1000
-    		self.broadcast_event('resume_song', track)
-    	else:
-	        self.request['last_track'] = track;
-	        self.broadcast_event('new_song', track)
+        self.request['last_track'] = track
+        self.broadcast_event('new_player_state', self.request['last_track'])
+
+    def on_new_song(self, track):
+        print 'server: new_song'
+
+        self.request['last_track'] = track
+        self.broadcast_event('new_song', track)
+
+    def on_resume_song(self, track):
+        print 'server: resume_song'
+
+        self.request['last_track'] = track
+        self.broadcast_event('resume_song', track)
+
+    def on_player_stopped(self):
+        print 'server: player_stopped'
+        self.broadcast_event('player_stopped')
 
 
 class Server(object):
+
     def __init__(self):
 
         self.request = {
@@ -63,15 +75,15 @@ class Server(object):
             try:
                 return open('index.html').read()
             except Exception:
-	            start_response('404 Not Found', [])
-	            return ['<h1>Not Found</h1>']
+                start_response('404 Not Found', [])
+                return ['<h1>Not Found</h1>']
 
         if path.startswith('static/'):
             try:
                 data = open(path, 'rb').read()
             except Exception:
-	            start_response('404 Not Found', [])
-	            return ['<h1>Not Found</h1>']
+                start_response('404 Not Found', [])
+                return ['<h1>Not Found</h1>']
 
             if path.endswith(".js"):
                 content_type = "text/javascript"
@@ -92,7 +104,7 @@ class Server(object):
             return [data]
 
         if path.startswith("socket.io"):
-			socketio_manage(environ, {'/song_info': SongInfoNamespace}, self.request)
+            socketio_manage(environ, {'/song_info': SongInfoServerNamespace}, self.request)
         else:
             start_response('404 Not Found', [])
             return ['<h1>Not Found</h1>']
@@ -100,118 +112,130 @@ class Server(object):
 
 class ServerThread(threading.Thread):
 
-	def run(self):
-		print 'server thread'
-		print 'Listening on port 8080 and on port 843 (flash policy server)'
-		SocketIOServer(('localhost', 8080), Server(),
-			resource="socket.io", policy_server=True,
-			policy_listener=('localhost', 10843)).serve_forever()
+    def run(self):
+        print 'server thread'
+        print 'Listening on port 8080 and on port 843 (flash policy server)'
+        SocketIOServer(('localhost', 8080), Server(),
+            resource="socket.io", policy_server=True,
+            policy_listener=('localhost', 10843)).serve_forever()
 
 
 #Client classes
+class SongInfoClientNamespace(BaseNamespace):
 
-class SocketEventsNamespace(BaseNamespace):
-	def on_connect(self):
-		print 'client: connect'
+    def on_connect(self):
+        print 'client: connect'
 
-	def on_disconnect(self):
-		print 'client: disconnect'
+    def on_disconnect(self):
+        print 'client: disconnect'
 
-	def on_error(self, name, message):
-		print 'client: error'
+    def on_error(self, name, message):
+        print 'client: error'
 
 
 class iTunesEventHandler():
-	def __init__(self):
-		print 'client: init'
+    def __init__(self):
+        print 'client: init'
+        self.last_track = get_track_info(None)
 
-		if iTunes.CurrentTrack != None:
-			self.OnPlayerPlayEvent(iTunes.CurrentTrack)
+        io_namespace.emit('new_player_state', self.last_track)
 
-	def OnPlayerPlayingTrackChanged(self, track):
-		print 'client: OnPlayerPlayingTrackChanged'
-	
-	def OnPlayerStopEvent(self, track):
-		print 'client: OnPlayerStop'
-		io_namespace.emit('player_stopped')
+    def OnPlayerPlayingTrackChanged(self, track):
+        print 'client: OnPlayerPlayingTrackChanged'
+    
+    def OnPlayerStopEvent(self, track):
+        print 'client: OnPlayerStop'
 
-	def OnPlayerPlayEvent(self, track):
-		print 'client: OnPlayerPlay'
-		io_namespace.emit('new_song', get_track_info(track))
+        io_namespace.emit('player_stopped')
+
+    def OnPlayerPlayEvent(self, track):
+        print 'client: OnPlayerPlay'
+
+        track = get_track_info(track)
+
+        if self.last_track and (track['name'], track['album']) == (self.last_track['name'], self.last_track['album']):
+            self.last_track = track;
+            track['position'] = iTunes.PlayerPosition * 1000
+            io_namespace.emit('resume_song', track)
+        else:
+            self.last_track = track;
+            io_namespace.emit('new_song', track)
+
+
+def get_track_info(track):
+    if track is None:
+        track = iTunes.CurrentTrack
+
+    track = win32com.client.CastTo(track, 'IITTrack')
+    artwork = None
+    try:
+        artwork_collection = win32com.client.CastTo(track.Artwork, 'IITArtworkCollection')
+        artwork = win32com.client.CastTo(artwork_collection.Item(1), 'IITArtwork')
+        
+        artwork_path = os.path.join(os.getcwd(), 'album.jpg')
+        artwork.SaveArtworkToFile(artwork_path)
+    except:
+        artwork = None
+
+    artwork_encoded = None
+
+    if artwork != None:     
+        with open(artwork_path, 'rb') as a:
+            data = a.read()
+            artwork_encoded = data.encode("Base64")
+    
+    return {
+        "name": track.Name,
+        "album": track.Album,
+        "artist": track.Artist,
+        "duration": track.Duration * 1000,
+        "position": iTunes.PlayerPosition * 1000,
+        "artwork": artwork_encoded,
+        "player_stopped": iTunes.PlayerState == 0
+    }
 
 
 class ClientThread(threading.Thread):
 
-	def run(self):
-		print 'client thread'
+    def run(self):
+        print 'client thread'
 
-		logging.basicConfig(level=logging.ERROR)
+        logging.basicConfig(level=logging.ERROR)
 
-		print 'launching itunes'
+        print 'launching itunes'
 
-		while True:
-			time.sleep(0.1)
-			pythoncom.PumpWaitingMessages()
+        while True:
+            time.sleep(0.1)
+            pythoncom.PumpWaitingMessages()
 
 
 class SocketKeepalive(threading.Thread):
 
-	def run(self):
-		print 'spinning io'
-		io.wait()
-
-
-def get_track_info(track):
-	if track is None:
-		return
-
-	track = win32com.client.CastTo(track, 'IITTrack')
-	artwork = None
-	try:
-		artwork_collection = win32com.client.CastTo(track.Artwork, 'IITArtworkCollection')
-		artwork = win32com.client.CastTo(artwork_collection.Item(1), 'IITArtwork')
-		
-		artwork_path = os.path.join(os.getcwd(), 'album.jpg')
-		artwork.SaveArtworkToFile(artwork_path)
-	except:
-		artwork = None
-
-	artwork_encoded = None
-
-	if artwork != None:		
-		with open(artwork_path, 'rb') as a:
-			data = a.read()
-			artwork_encoded = data.encode("Base64")
-	
-	return {
-		"name": track.Name,
-		"album": track.Album,
-		"artist": track.Artist,
-		"duration": track.Duration * 1000,
-		"position": iTunes.PlayerPosition * 1000,
-		"artwork": artwork_encoded,
-		"player_stopped": iTunes.PlayerState == 0
-	}
+    def run(self):
+        print 'spinning io'
+        io.wait()
 
 
 if __name__ == '__main__':
-	server_thread = ServerThread()
-	server_thread.start()
+    server_thread = ServerThread()
+    server_thread.start()
 
-	io = SocketIO('localhost', 8080, SocketEventsNamespace)
-	io_namespace = io.define(SocketEventsNamespace, '/song_info')
+    io = SocketIO('localhost', 8080, SongInfoClientNamespace)
+    io_namespace = io.define(SongInfoClientNamespace, '/song_info')
 
-	iTunes = win32com.client.Dispatch("iTunes.Application")
-	iTunesEvents = win32com.client.WithEvents(iTunes, iTunesEventHandler)
-	
-	client_thread = ClientThread()
-	client_thread.start()
+    iTunes = win32com.client.Dispatch("iTunes.Application")
+    iTunesEvents = win32com.client.WithEvents(iTunes, iTunesEventHandler)
+    
+    client_thread = ClientThread()
+    client_thread.start()
 
-	socket_keepalive_thread = SocketKeepalive()
-	socket_keepalive_thread.start()
+    socket_keepalive_thread = SocketKeepalive()
+    socket_keepalive_thread.start()
 
-	while not msvcrt.kbhit():
-		time.sleep(0.1)
+    while not msvcrt.kbhit():
+        time.sleep(0.1)
 
-	iTunesEvents.close()
-	del iTunesEvents, iTunes
+    msvcrt.getch()
+
+    iTunesEvents.close()
+    del iTunesEvents, iTunes

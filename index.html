@@ -168,6 +168,7 @@
 
                 socket.on('disconnect', function() {
                     console.log('disconnected');
+
                     clearInterval(progress_interval);
                 });
 
@@ -186,6 +187,7 @@
                 socket.on('player_stopped', function()
                 {
                     console.log('player_stopped');
+
                     clearInterval(progress_interval);
                     progress_bar.addClass('paused');
                 });
@@ -203,20 +205,23 @@
 
                 socket.on('new_song', function(song_info)
                 {
-                    console.log('new_song')
+                    console.log('new_song');
+
                     now_playing = song_info;
-                    update_song_info()
+                    update_song_info();
+                    update_progress();
                     
                 });
 
                 socket.on('new_player_state', function(song_info)
                 {
-                    console.log('new_player_state')
+                    console.log('new_player_state');
+
                     if(song_info.name != now_playing.name || song_info.album != song_info.album)
                     {
                         now_playing = song_info;
-                        update_song_info()
-                        update_progress()
+                        update_song_info();
+                        update_progress();
                     }
                     else
                     {
@@ -245,17 +250,7 @@
                         setTimeout(function(){current_song_info.removeClass('hidden'); song_info_text.removeClass('hidden');}, 1000);
                     }, 1000);
 
-
-                    update_progress();
-                    progress_bar.addClass('paused');
-
-                    if(!now_playing.player_stopped)
-                    {
-                        clearInterval(progress_interval);
-                        progress_bar.removeClass('paused');
-                        progress_interval = setInterval(update_progress, 1000);    
-                    }
-                }
+                };
 
                 var update_progress = function(){
                     if(!now_playing && !now_playing.started)
@@ -265,9 +260,18 @@
 
                     percent_played = (Date.now() - now_playing.started) / now_playing.duration;
                     progress_bar.css('width', percent_played * 100 + '%');
-                }
 
-            })  
+                    progress_bar.addClass('paused');
+
+                    if(!now_playing.player_stopped)
+                    {
+                        clearInterval(progress_interval);
+                        progress_bar.removeClass('paused');
+                        progress_interval = setInterval(update_progress, 1000);    
+                    }
+                };
+
+            });
 
         </script>
     </body>
