@@ -162,9 +162,8 @@
                     socket.disconnect();
                 });
 
-                socket.on('connect', function () {
+                socket.on('connect', function (song_info) {
                     console.log('Connected.');
-                    socket.emit('initialize');
                 });
 
                 socket.on('disconnect', function() {
@@ -205,20 +204,43 @@
                 socket.on('new_song', function(song_info)
                 {
                     console.log('new_song')
+                    now_playing = song_info;
+                    update_song_info()
+                    
+                });
+
+                socket.on('new_player_state', function(song_info)
+                {
+                    console.log('new_player_state')
+                    if(song_info.name != now_playing.name || song_info.album != song_info.album)
+                    {
+                        now_playing = song_info;
+                        update_song_info()
+                        update_progress()
+                    }
+                    else
+                    {
+                        now_playing = song_info;
+                        update_progress();
+                    }
+
+                });
+
+                var update_song_info = function()
+                {
                     current_song_info.addClass('hidden');
                     song_info_text.addClass('hidden');
 
-                    now_playing = song_info;
+                    
                     now_playing.started = Date.now() - now_playing.position;
 
                     setTimeout(function(){
-                        // song_info_text.text(song_info.name + ' by ' + song_info.artist);
-                        song_info_text.find('#song_info_artist').text(song_info.artist);
-                        song_info_text.find('#song_info_name').text(song_info.name);
-                        if(song_info.artwork == null)
+                        song_info_text.find('#song_info_artist').text(now_playing.artist);
+                        song_info_text.find('#song_info_name').text(now_playing.name);
+                        if(now_playing.artwork == null)
                             album_art.attr('src', 'static/img/album_art_not_found.png');
                         else
-                            album_art.attr('src', 'data:image/jpeg;base64,' + song_info.artwork);
+                            album_art.attr('src', 'data:image/jpeg;base64,' + now_playing.artwork);
 
                         setTimeout(function(){current_song_info.removeClass('hidden'); song_info_text.removeClass('hidden');}, 1000);
                     }, 1000);
@@ -233,10 +255,9 @@
                         progress_bar.removeClass('paused');
                         progress_interval = setInterval(update_progress, 1000);    
                     }
-                    
-                });
+                }
 
-                var update_progress = function(value){
+                var update_progress = function(){
                     if(!now_playing && !now_playing.started)
                     {
                         return;
