@@ -156,7 +156,7 @@
                 var now_playing = {};
                 var progress_interval = null;
 
-                var socket = io.connect();
+                var socket = io.connect('/song_info');
 
                 $(window).bind("beforeunload", function() {
                     socket.disconnect();

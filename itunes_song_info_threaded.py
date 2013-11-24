@@ -98,7 +98,7 @@ class Server(object):
             return [data]
 
         if path.startswith("socket.io"):
-			socketio_manage(environ, {'': SongInfoNamespace}, self.request)
+			socketio_manage(environ, {'/song_info': SongInfoNamespace}, self.request)
         else:
             start_response('404 Not Found', [])
             return ['<h1>Not Found</h1>']
@@ -147,7 +147,7 @@ class SocketEventsNamespace(BaseNamespace):
 				data = a.read()
 				artwork_encoded = data.encode("Base64")
 		
-		io.emit('new_song', {
+		self.emit('new_song', {
 			"name": track.Name,
 			"album": track.Album,
 			"artist": track.Artist,
@@ -156,6 +156,7 @@ class SocketEventsNamespace(BaseNamespace):
 			"artwork": artwork_encoded,
 			"player_stopped": iTunes.PlayerState == 0
 		})
+
 class iTunesEventHandler():
 	def __init__(self):
 		print 'client: init'
@@ -168,7 +169,7 @@ class iTunesEventHandler():
 	
 	def OnPlayerStopEvent(self, track):
 		print 'client: OnPlayerStop'
-		io.emit('player_stopped')
+		io_namespace.emit('player_stopped')
 
 	def OnPlayerPlayEvent(self, track):
 		print 'client: OnPlayerPlay'
@@ -190,7 +191,7 @@ class iTunesEventHandler():
 				data = a.read()
 				artwork_encoded = data.encode("Base64")
 
-		io.emit('new_song', {
+		io_namespace.emit('new_song', {
 			"name": track.Name,
 			"album": track.Album,
 			"artist": track.Artist,
@@ -226,6 +227,8 @@ if __name__ == '__main__':
 	server_thread.start()
 
 	io = SocketIO('localhost', 8080, SocketEventsNamespace)
+	io_namespace = io.define(SocketEventsNamespace, '/song_info')
+
 	iTunes = win32com.client.Dispatch("iTunes.Application")
 	iTunesEvents = win32com.client.WithEvents(iTunes, iTunesEventHandler)
 	
