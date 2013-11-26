@@ -213,24 +213,6 @@
                     
                 });
 
-                socket.on('new_player_state', function(song_info)
-                {
-                    console.log('new_player_state');
-
-                    if(song_info.name != now_playing.name || song_info.album != song_info.album)
-                    {
-                        now_playing = song_info;
-                        update_song_info();
-                        update_progress();
-                    }
-                    else
-                    {
-                        now_playing = song_info;
-                        update_progress();
-                    }
-
-                });
-
                 var update_song_info = function()
                 {
                     current_song_info.addClass('hidden');
