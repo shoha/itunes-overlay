@@ -27,18 +27,14 @@ class SongInfoServerNamespace(socketio.namespace.BaseNamespace, BroadcastMixin):
         print 'server: recv_connect'
 
         self.request['last_track'] = get_track_info(None)
-        self.emit('new_player_state', self.request['last_track'])
+
+        if self.request['last_track']:
+            self.emit('new_song', self.request['last_track'])
 
     def recv_disconnect(self):
         print 'server: recv_disconnect'
 
         self.disconnect(silent=True)
-
-    def on_new_player_state(self, track):
-        print 'server: new_player_state'
-
-        self.request['last_track'] = track
-        self.broadcast_event('new_player_state', self.request['last_track'])
 
     def on_new_song(self, track):
         print 'server: new_song'
@@ -134,11 +130,13 @@ class SongInfoClientNamespace(BaseNamespace):
 
 
 class iTunesEventHandler():
+    
     def __init__(self):
         print 'client: init'
         self.last_track = get_track_info(None)
 
-        io_namespace.emit('new_player_state', self.last_track)
+        if self.last_track:
+            io_namespace.emit('new_song', self.last_track)
 
     def OnPlayerPlayingTrackChanged(self, track):
         print 'client: OnPlayerPlayingTrackChanged'
@@ -165,6 +163,9 @@ class iTunesEventHandler():
 def get_track_info(track):
     if track is None:
         track = iTunes.CurrentTrack
+
+    if track is None:
+        return None
 
     track = win32com.client.CastTo(track, 'IITTrack')
     artwork = None
