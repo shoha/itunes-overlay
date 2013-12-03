@@ -9,6 +9,6 @@ How to Use
 
 Run itunes_song_info_threaded.exe
 
-iTunes will launch automatically if it was not already running. The program will serve index.html at localhost:8080. To display it as an overlay you can use [Faruton's CLR Browser Source](https://obsproject.com/forum/viewtopic.php?f=11&t=6714) plugin for OBS (settings should look like [this](http://i.imgur.com/8xxgmnq.png) , or screen region a browser pointed to localhost:8080 and then chroma/color key.
+iTunes will launch automatically if it was not already running. The program will serve index.html at localhost:8080. To display it as an overlay you can use [Faruton's CLR Browser Source](https://obsproject.com/forum/viewtopic.php?f=11&t=6714) plugin for OBS (settings should look like [this](http://i.imgur.com/8xxgmnq.png)) , or screen region a browser pointed to localhost:8080 and then chroma/color key if you are using XSplit.
 
-Exit the program by entering any character to the command line. Simply closing the window will leave the COM open and iTunes will hang for a few seconds and complain before letting you quit.
+Exit the program by entering any character into the command line. Simply closing the window will leave the COM open and iTunes will hang for a few seconds and complain before letting you quit.
